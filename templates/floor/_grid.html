@@ -20,7 +20,11 @@
         <span class="tile-grade">{{ h.resinGrade }}</span>
         {% if open %}
         <span class="tile-temp mono">目标 {{ open.targetSoftPointC }}℃</span>
+        {% if open.resinLot %}
         <span class="tile-lot">{{ open.resinLot.lotCode }}</span>
+        {% else %}
+        <span class="tile-lot muted">未绑定来脂批</span>
+        {% endif %}
         {% else %}
         <span class="tile-temp mono muted">无开灶</span>
         {% endif %}

@@ -1,7 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Prefetch
+from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -215,10 +217,26 @@ def resin_lot_feed(request):
 @require_POST
 def delete_resin_lot(request, pk):
     lot = get_object_or_404(ResinLot, pk=pk)
-    open_count = CookRun.objects.filter(resinLot=lot, closedAt__isnull=False).count()
+    # 只要还有「未收灶值守」引用该批，就必须挡住删除。
+    open_count = CookRun.objects.filter(
+        resinLot=lot, closedAt__isnull=True
+    ).count()
     if open_count > 0:
-        messages.error(request, "仍有值守引用该来脂批，已阻止删除")
-    else:
-        messages.success(request, "来脂批已删除")
-    lot.delete()
+        messages.error(
+            request,
+            f"该来脂批仍有 {open_count} 个未收灶值守，已阻止删除；"
+            "请先收灶后再删除。",
+        )
+        return redirect("resin_lot_feed")
+
+    # 确认没有未收灶值守后才允许真删（历史已收灶值守的引用按 SET_NULL 脱钩）。
+    try:
+        with transaction.atomic():
+            lot.delete()
+    except ProtectedError:
+        # 兜底旧库：外键仍为 PROTECT 时不删库、不报 500。
+        messages.error(request, "该来脂批仍被值守记录引用，已阻止删除。")
+        return redirect("resin_lot_feed")
+
+    messages.success(request, "来脂批已删除")
     return redirect("resin_lot_feed")
