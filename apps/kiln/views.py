@@ -10,7 +10,11 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from .forms import OpenCookRunForm, PhaseChangeForm, ResinLotForm, SoftPointProbeForm
 from .models import CookRun, FireHearth, ResinLot
-from .services.floor_rules import change_hearth_phase
+from .services.floor_rules import (
+    assert_lot_deletable,
+    change_hearth_phase,
+    open_runs_for_lot,
+)
 
 
 def _wants_htmx(request):
@@ -215,10 +219,26 @@ def resin_lot_feed(request):
 @require_POST
 def delete_resin_lot(request, pk):
     lot = get_object_or_404(ResinLot, pk=pk)
-    open_count = CookRun.objects.filter(resinLot=lot, closedAt__isnull=False).count()
-    if open_count > 0:
-        messages.error(request, "仍有值守引用该来脂批，已阻止删除")
-    else:
-        messages.success(request, "来脂批已删除")
-    lot.delete()
+    blocking = open_runs_for_lot(lot).select_related("hearth")
+    blockers = list(blocking.order_by("-openedAt", "-id"))
+    if blockers:
+        tags = "、".join(run.hearth.tag for run in blockers[:5])
+        if len(blockers) > 5:
+            tags += f" 等 {len(blockers)} 灶"
+        messages.error(
+            request,
+            f"来脂批 {lot.lotCode} 仍有 {len(blockers)} 个未收灶值守（{tags}），"
+            "已阻止删除；请先收灶。",
+        )
+        return redirect("resin_lot_feed")
+
+    try:
+        assert_lot_deletable(lot)  # 模型层兜底前的最后一道视图校验
+        lot.delete()
+    except ValidationError as exc:
+        # 竞态/并发下刚被新值守引用，或模型层信号拦截
+        messages.error(request, "；".join(exc.messages))
+        return redirect("resin_lot_feed")
+
+    messages.success(request, f"来脂批 {lot.lotCode} 已删除")
     return redirect("resin_lot_feed")

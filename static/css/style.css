@@ -382,6 +382,7 @@ body {
 .tile-grade { font-size: 0.78rem; color: var(--steel); }
 .tile-temp { font-size: 0.85rem; margin-top: 0.25rem; }
 .tile-lot { font-size: 0.68rem; color: var(--steel); word-break: break-all; }
+.lot-missing { color: var(--danger); opacity: 0.85; }
 
 .board-empty { color: var(--steel); }
 

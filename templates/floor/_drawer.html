@@ -13,8 +13,10 @@
   <section class="drawer-block">
     <h3>进行中值守</h3>
     <dl class="kv">
-      <dt>来脂批</dt><dd>{{ open_run.resinLot.lotCode }}</dd>
-      <dt>来源</dt><dd>{{ open_run.resinLot.originPlace }}</dd>
+      <dt>来脂批</dt>
+      <dd>{% if open_run.resinLot %}{{ open_run.resinLot.lotCode }}{% else %}<span class="lot-missing">未绑定批号（历史脏数据）</span>{% endif %}</dd>
+      <dt>来源</dt>
+      <dd>{% if open_run.resinLot %}{{ open_run.resinLot.originPlace }}{% else %}<span class="muted">—</span>{% endif %}</dd>
       <dt>开灶</dt><dd class="mono">{{ open_run.openedAt|date:"Y-m-d H:i" }}</dd>
       <dt>目标软化点</dt><dd class="mono">{{ open_run.targetSoftPointC }} ℃</dd>
     </dl>

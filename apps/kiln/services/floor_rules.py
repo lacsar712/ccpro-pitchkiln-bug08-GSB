@@ -39,3 +39,37 @@ def change_hearth_phase(hearth, new_phase: str):
     hearth.phase = new_phase
     hearth.save(update_fields=["phase"])
     return hearth
+
+
+def open_runs_for_lot(lot):
+    """该来脂批名下所有「未收灶」（closedAt 为空）的值守。"""
+    from apps.kiln.models import CookRun
+
+    return CookRun.objects.filter(resinLot=lot, closedAt__isnull=True)
+
+
+def assert_lot_deletable(lot) -> None:
+    """
+    删除来脂批前的硬规则：只要还有一条未收灶值守引用该批，就不允许删除。
+
+    已收灶的历史值守（resinLot 为 SET_NULL）不阻止删除。
+    """
+    from apps.kiln.models import CookRun
+
+    blocking = (
+        CookRun.objects.filter(resinLot=lot, closedAt__isnull=True)
+        .select_related("hearth")
+        .order_by("-openedAt", "-id")
+        .first()
+    )
+    if blocking is not None:
+        raise ValidationError(
+            f"来脂批 {lot.lotCode} 仍有未收灶值守（灶牌 {blocking.hearth.tag}），"
+            "请先收灶再删除。"
+        )
+
+
+def delete_resin_lot(lot) -> None:
+    """统一入口：确认没有未收灶值守后，才真正删除来脂批。"""
+    assert_lot_deletable(lot)
+    lot.delete()

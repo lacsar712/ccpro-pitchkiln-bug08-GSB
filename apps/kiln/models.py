@@ -1,4 +1,7 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 
 
 class ResinLot(models.Model):
@@ -14,6 +17,17 @@ class ResinLot(models.Model):
 
     def __str__(self):
         return f"{self.lotCode} · {self.originPlace}"
+
+
+@receiver(pre_delete, sender=ResinLot)
+def _block_delete_lot_with_open_runs(sender, instance, **kwargs):
+    """
+    模型层兜底：任何入口（页面 / admin / QuerySet.delete）删除来脂批时，
+    只要还有未收灶值守就必须挡住，保证值守与批号引用完整。
+    """
+    from .services.floor_rules import assert_lot_deletable
+
+    assert_lot_deletable(instance)
 
 
 class FireHearth(models.Model):
